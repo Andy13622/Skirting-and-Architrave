@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Skirting Board Visualizer V2</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    /* Custom scrollbar for control panel */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+
+  <!-- Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Overlay UI Panel -->
+  <div class="absolute top-4 left-4 z-10 w-80 md:w-96 max-h-[calc(100vh-2rem)] overflow-y-auto bg-slate-900/90 backdrop-blur-md border border-slate-700/60 rounded-xl p-5 shadow-2xl space-y-5 text-sm">
+    
+    <!-- Header -->
+    <div class="border-b border-slate-700/80 pb-3 flex items-center justify-between">
+      <div>
+        <h1 class="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+          <i data-lucide="box" class="w-5 h-5 text-blue-400"></i> Skirting Visualizer
+        </h1>
+        <p class="text-xs text-slate-400 mt-0.5">Parametric 3D Profile Inspection</p>
+      </div>
+      <span class="px-2 py-1 text-[10px] font-semibold tracking-wider text-blue-400 bg-blue-950/60 border border-blue-800/50 rounded-full uppercase">3D CAD</span>
+    </div>
+
+    <!-- Dimension Controls -->
+    <div class="space-y-4">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+        <i data-lucide="ruler" class="w-4 h-4 text-blue-400"></i> Profile Dimensions (mm)
+      </h2>
+
+      <!-- Length (10mm Increments) -->
+      <div class="space-y-1.5">
+        <div class="flex justify-between items-center text-xs">
+          <label for="inp-length" class="text-slate-300 font-medium">Length (L)</label>
+          <span class="text-blue-400 font-mono font-semibold" id="val-length">2440 mm</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="number" id="inp-length" value="2440" step="10" min="100" max="5000"
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+        </div>
+        <p class="text-[10px] text-slate-500">Increments of 10mm</p>
+      </div>
+
+      <!-- Height (119mm default) -->
+      <div class="space-y-1.5">
+        <div class="flex justify-between items-center text-xs">
+          <label for="inp-height" class="text-slate-300 font-medium">Height (H)</label>
+          <span class="text-blue-400 font-mono font-semibold" id="val-height">119 mm</span>
+        </div>
+        <input type="number" id="inp-height" value="119" step="1" min="30" max="500"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+      </div>
+
+      <!-- Depth/Thickness (18mm default) -->
+      <div class="space-y-1.5">
+        <div class="flex justify-between items-center text-xs">
+          <label for="inp-depth" class="text-slate-300 font-medium">Depth / Thickness (D)</label>
+          <span class="text-blue-400 font-mono font-semibold" id="val-depth">18 mm</span>
+        </div>
+        <input type="number" id="inp-depth" value="18" step="1" min="8" max="50"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+      </div>
+    </div>
+
+    <hr class="border-slate-800">
+
+    <!-- Action Buttons Grid -->
+    <div class="space-y-2.5">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+        <i data-lucide="sliders" class="w-4 h-4 text-blue-400"></i> Controls & Display
+      </h2>
+
+      <!-- 1. Toggle Dimensions -->
+      <button id="btn-toggle-dims"
+        class="w-full bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 font-medium py-2 px-3 rounded-lg border border-slate-700/80 transition flex items-center justify-between text-xs group">
+        <span class="flex items-center gap-2">
+          <i data-lucide="eye" class="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition"></i> Show/Hide Dimensions
+        </span>
+        <span id="badge-dims" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">ON</span>
+      </button>
+
+      <!-- 2. Toggle Background -->
+      <button id="btn-toggle-bg"
+        class="w-full bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 font-medium py-2 px-3 rounded-lg border border-slate-700/80 transition flex items-center justify-between text-xs group">
+        <span class="flex items-center gap-2">
+          <i data-lucide="moon" class="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition"></i> Background: <span id="lbl-bg-state">Black</span>
+        </span>
+        <div id="dot-bg-state" class="w-3 h-3 rounded-full bg-black border border-slate-600"></div>
+      </button>
+
+      <!-- 3. Main Finish Color Selector -->
+      <div class="w-full bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 font-medium py-2 px-3 rounded-lg border border-slate-700/80 transition flex items-center justify-between text-xs group cursor-pointer relative">
+        <span class="flex items-center gap-2">
+          <i data-lucide="palette" class="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition"></i> Main Finish Color
+        </span>
+        <div class="flex items-center gap-2">
+          <span id="lbl-main-color" class="text-[10px] text-slate-300 font-mono">#fffb85</span>
+          <input type="color" id="inp-main-color" value="#fffb85" class="w-5 h-5 rounded cursor-pointer bg-transparent border-0">
+        </div>
+      </div>
+
+      <!-- 4. Side Faces Color Selector -->
+      <div class="w-full bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 font-medium py-2 px-3 rounded-lg border border-slate-700/80 transition flex items-center justify-between text-xs group cursor-pointer relative">
+        <span class="flex items-center gap-2">
+          <i data-lucide="layers" class="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition"></i> Side Faces Color
+        </span>
+        <div class="flex items-center gap-2">
+          <span id="lbl-side-color" class="text-[10px] text-slate-300 font-mono">#ffffff</span>
+          <input type="color" id="inp-side-color" value="#ffffff" class="w-5 h-5 rounded cursor-pointer bg-transparent border-0">
+        </div>
+      </div>
+
+      <!-- 5. Mirror Reverse Front & Back -->
+      <button id="btn-mirror"
+        class="w-full bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 font-medium py-2 px-3 rounded-lg border border-slate-700/80 transition flex items-center justify-between text-xs group">
+        <span class="flex items-center gap-2">
+          <i data-lucide="flip-horizontal" class="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition"></i> Mirror Reverse (Front/Back)
+        </span>
+        <span id="badge-mirror" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">NORMAL</span>
+      </button>
+
+      <!-- 6. 360 Degree Auto-Rotate Toggle -->
+      <button id="btn-auto-rotate"
+        class="w-full bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 font-medium py-2 px-3 rounded-lg border border-slate-700/80 transition flex items-center justify-between text-xs group">
+        <span class="flex items-center gap-2">
+          <i data-lucide="rotate-3d" class="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition"></i> 360° Auto Rotate
+        </span>
+        <span id="badge-rotate" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">ON</span>
+      </button>
+    </div>
+
+    <!-- Quick Camera Preset Buttons -->
+    <div class="pt-2 border-t border-slate-800">
+      <div class="text-[11px] font-semibold text-slate-400 mb-2">Camera Presets:</div>
+      <div class="grid grid-cols-3 gap-1.5">
+        <button id="cam-iso" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 rounded border border-slate-700">3D View</button>
+        <button id="cam-front" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 rounded border border-slate-700">Front (Groove)</button>
+        <button id="cam-side" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 rounded border border-slate-700">Profile Cross</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Floating Instructions / View Controls -->
+  <div class="absolute bottom-4 right-4 z-10 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-lg px-3 py-2 text-[11px] text-slate-400 flex items-center gap-3">
+    <span class="flex items-center gap-1"><i data-lucide="mouse-pointer" class="w-3.5 h-3.5 text-blue-400"></i> Orbit: Drag</span>
+    <span class="flex items-center gap-1"><i data-lucide="move" class="w-3.5 h-3.5 text-blue-400"></i> Pan: Right Click</span>
+    <span class="flex items-center gap-1"><i data-lucide="zoom-in" class="w-3.5 h-3.5 text-blue-400"></i> Zoom: Scroll</span>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    // Initialize icons
+    lucide.createIcons();
+
+    // App State Parameters (Preset to match uploaded screenshot)
+    const state = {
+      length: 2440,   // mm
+      height: 119,    // mm
+      depth: 18,      // mm
+      showDimensions: true,
+      bgIsBlack: true,
+      mainColor: '#fffb85',
+      sideColor: '#ffffff',
+      useWoodTexture: true,
+      isMirrored: false,
+      autoRotate: true
+    };
+
+    // Start Camera Preset matching the uploaded screenshot angle
+    const DEFAULT_CAM_POS = { x: 240, y: 155, z: 1680 };
+    const DEFAULT_CAM_TARGET = { x: -160, y: 60, z: 0 };
+
+    // Global Three.js Scene Variables
+    let scene, camera, renderer, controls;
+    let skirtingMesh, dimensionsGroup;
+    let woodTexture, mainMaterial, sideMaterial;
+
+    // Initialize Procedural Wood Grain Texture Canvas
+    function generateWoodTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      // Base tone
+      ctx.fillStyle = state.sideColor;
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Wood rings and grain
+      ctx.fillStyle = 'rgba(120, 70, 25, 0.12)';
+      for (let i = 0; i < 400; i++) {
+        const x = Math.random() * 512;
+        const y = Math.random() * 512;
+        const w = 2 + Math.random() * 8;
+        const h = 50 + Math.random() * 200;
+        ctx.fillRect(x, y, w, h);
+      }
+
+      // Fine grain lines
+      ctx.fillStyle = 'rgba(80, 40, 10, 0.08)';
+      for (let y = 0; y < 512; y += 3) {
+        ctx.fillRect(0, y + (Math.random() * 2), 512, 1);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    }
+
+    // Create 2D Profile Shape based on Technical Drawing Specifications
+    function buildProfileShape(h, d, mirror) {
+      const shape = new THREE.Shape();
+      const r = 1.5; // Top right radius mm
+      const grooveTopOffset = 20; // 20mm from top
+      const grooveDepth = 4;      // 4mm into body
+      const grooveHeight = 4;     // 4mm tall
+
+      if (!mirror) {
+        shape.moveTo(0, 0);
+        shape.lineTo(0, h);
+        shape.lineTo(d - r, h);
+        shape.absarc(d - r, h - r, r, Math.PI / 2, 0, true);
+        shape.lineTo(d, h - grooveTopOffset);
+        shape.lineTo(d - grooveDepth, h - grooveTopOffset);
+        shape.lineTo(d - grooveDepth, h - grooveTopOffset - grooveHeight);
+        shape.lineTo(d, h - grooveTopOffset - grooveHeight);
+        shape.lineTo(d, 0);
+        shape.lineTo(0, 0);
+      } else {
+        shape.moveTo(d, 0);
+        shape.lineTo(d, h);
+        shape.lineTo(r, h);
+        shape.absarc(r, h - r, r, Math.PI / 2, Math.PI, false);
+        shape.lineTo(0, h - grooveTopOffset);
+        shape.lineTo(grooveDepth, h - grooveTopOffset);
+        shape.lineTo(grooveDepth, h - grooveTopOffset - grooveHeight);
+        shape.lineTo(0, h - grooveTopOffset - grooveHeight);
+        shape.lineTo(0, 0);
+        shape.lineTo(d, 0);
+      }
+
+      return shape;
+    }
+
+    // Initialize Scene Setup
+    function init() {
+      const container = document.getElementById('canvas-container');
+
+      // 1. Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(state.bgIsBlack ? 0x0a0c10 : 0xf1f5f9);
+
+      // 2. Camera
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+      camera.position.set(DEFAULT_CAM_POS.x, DEFAULT_CAM_POS.y, DEFAULT_CAM_POS.z);
+
+      // 3. Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      // 4. OrbitControls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxPolarAngle = Math.PI / 2 + 0.1;
+      controls.target.set(DEFAULT_CAM_TARGET.x, DEFAULT_CAM_TARGET.y, DEFAULT_CAM_TARGET.z);
+      controls.autoRotate = state.autoRotate;
+      controls.autoRotateSpeed = 1.5;
+      controls.update();
+
+      // 5. Lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+
+      const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight1.position.set(500, 1000, 750);
+      dirLight1.castShadow = true;
+      dirLight1.shadow.mapSize.width = 2048;
+      dirLight1.shadow.mapSize.height = 2048;
+      scene.add(dirLight1);
+
+      const dirLight2 = new THREE.DirectionalLight(0x90b0ff, 0.3);
+      dirLight2.position.set(-500, 300, -500);
+      scene.add(dirLight2);
+
+      // Ground plane grid for scale
+      const gridHelper = new THREE.GridHelper(3000, 30, 0x3b82f6, 0x334155);
+      gridHelper.position.y = -2;
+      scene.add(gridHelper);
+
+      // Materials setup
+      woodTexture = generateWoodTexture();
+
+      mainMaterial = new THREE.MeshStandardMaterial({
+        color: state.mainColor,
+        roughness: 0.35,
+        metalness: 0.05
+      });
+
+      sideMaterial = new THREE.MeshStandardMaterial({
+        map: woodTexture,
+        color: state.sideColor,
+        roughness: 0.5,
+        metalness: 0.0
+      });
+
+      rebuildSkirtingMesh();
+      setupUIEventListeners();
+      window.addEventListener('resize', onWindowResize);
+      animate();
+    }
+
+    // Rebuild the Skirting Mesh on state changes
+    function rebuildSkirtingMesh() {
+      if (skirtingMesh) {
+        scene.remove(skirtingMesh);
+        skirtingMesh.geometry.dispose();
+      }
+
+      const shape = buildProfileShape(state.height, state.depth, state.isMirrored);
+
+      const extrudeSettings = {
+        steps: 1,
+        depth: state.length,
+        bevelEnabled: false
+      };
+
+      const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      geometry.center();
+
+      // Update material colors dynamically
+      mainMaterial.color.set(state.mainColor);
+      
+      // Re-generate texture with updated side color
+      woodTexture = generateWoodTexture();
+      sideMaterial.map = woodTexture;
+      sideMaterial.color.set(state.sideColor);
+      sideMaterial.map.needsUpdate = true;
+
+      const materials = [mainMaterial, sideMaterial];
+
+      skirtingMesh = new THREE.Mesh(geometry, materials);
+      skirtingMesh.castShadow = true;
+      skirtingMesh.receiveShadow = true;
+      skirtingMesh.position.y = state.height / 2;
+
+      scene.add(skirtingMesh);
+      rebuildDimensionsOverlay();
+    }
+
+    // Helper to generate 3D Dimension Annotation overlays
+    function rebuildDimensionsOverlay() {
+      if (dimensionsGroup) {
+        scene.remove(dimensionsGroup);
+      }
+
+      dimensionsGroup = new THREE.Group();
+
+      if (!state.showDimensions) return;
+
+      const halfL = state.length / 2;
+      const halfH = state.height / 2;
+      const halfD = state.depth / 2;
+
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 });
+
+      // 1. Length Dimension Line
+      const lY = -15;
+      const lX = state.isMirrored ? -halfD - 10 : halfD + 10;
+      
+      const lengthGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(lX, lY, -halfL),
+        new THREE.Vector3(lX, lY, halfL)
+      ]);
+      const lengthLine = new THREE.Line(lengthGeo, lineMat);
+      dimensionsGroup.add(lengthLine);
+
+      const lengthCanvas = createTextCanvas(`L: ${state.length} mm`, '#38bdf8');
+      const lengthSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: lengthCanvas, transparent: true }));
+      lengthSprite.scale.set(160, 40, 1);
+      lengthSprite.position.set(lX + 30, lY, 0);
+      dimensionsGroup.add(lengthSprite);
+
+      // 2. Height Dimension Line
+      const hX = state.isMirrored ? halfD + 15 : -halfD - 15;
+      const heightGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(hX, 0, halfL + 10),
+        new THREE.Vector3(hX, state.height, halfL + 10)
+      ]);
+      const heightLine = new THREE.Line(heightGeo, lineMat);
+      dimensionsGroup.add(heightLine);
+
+      const heightCanvas = createTextCanvas(`H: ${state.height} mm`, '#38bdf8');
+      const heightSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: heightCanvas, transparent: true }));
+      heightSprite.scale.set(160, 40, 1);
+      heightSprite.position.set(hX, halfH, halfL + 35);
+      dimensionsGroup.add(heightSprite);
+
+      // 3. Depth Dimension Line
+      const dY = state.height + 15;
+      const depthGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-halfD, dY, halfL),
+        new THREE.Vector3(halfD, dY, halfL)
+      ]);
+      const depthLine = new THREE.Line(depthGeo, lineMat);
+      dimensionsGroup.add(depthLine);
+
+      const depthCanvas = createTextCanvas(`D: ${state.depth} mm`, '#38bdf8');
+      const depthSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: depthCanvas, transparent: true }));
+      depthSprite.scale.set(140, 35, 1);
+      depthSprite.position.set(0, dY + 20, halfL);
+      dimensionsGroup.add(depthSprite);
+
+      scene.add(dimensionsGroup);
+    }
+
+    // Helper: Create Text Texture Canvas for 3D Sprites
+    function createTextCanvas(text, color) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.roundRect(4, 4, 248, 56, 8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 2;
+      ctx.roundRect(4, 4, 248, 56, 8);
+      ctx.stroke();
+
+      ctx.font = 'Bold 24px Inter, sans-serif';
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 128, 32);
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    // UI Controls Event Listeners
+    function setupUIEventListeners() {
+      // 1. Length Input
+      const inpLength = document.getElementById('inp-length');
+      const valLength = document.getElementById('val-length');
+      inpLength.addEventListener('input', (e) => {
+        let val = parseInt(e.target.value) || 100;
+        val = Math.round(val / 10) * 10;
+        state.length = Math.max(100, Math.min(5000, val));
+        valLength.textContent = `${state.length} mm`;
+        rebuildSkirtingMesh();
+      });
+
+      // 2. Height Input
+      const inpHeight = document.getElementById('inp-height');
+      const valHeight = document.getElementById('val-height');
+      inpHeight.addEventListener('input', (e) => {
+        state.height = parseInt(e.target.value) || 119;
+        valHeight.textContent = `${state.height} mm`;
+        rebuildSkirtingMesh();
+      });
+
+      // 3. Depth Input
+      const inpDepth = document.getElementById('inp-depth');
+      const valDepth = document.getElementById('val-depth');
+      inpDepth.addEventListener('input', (e) => {
+        state.depth = parseInt(e.target.value) || 18;
+        valDepth.textContent = `${state.depth} mm`;
+        rebuildSkirtingMesh();
+      });
+
+      // 4. Toggle Dimensions
+      const btnDims = document.getElementById('btn-toggle-dims');
+      const badgeDims = document.getElementById('badge-dims');
+      btnDims.addEventListener('click', () => {
+        state.showDimensions = !state.showDimensions;
+        badgeDims.textContent = state.showDimensions ? 'ON' : 'OFF';
+        badgeDims.className = state.showDimensions 
+          ? 'text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30'
+          : 'text-[10px] px-2 py-0.5 rounded-full bg-slate-700 text-slate-400';
+        rebuildDimensionsOverlay();
+      });
+
+      // 5. Toggle Background Color
+      const btnBg = document.getElementById('btn-toggle-bg');
+      const lblBg = document.getElementById('lbl-bg-state');
+      const dotBg = document.getElementById('dot-bg-state');
+      btnBg.addEventListener('click', () => {
+        state.bgIsBlack = !state.bgIsBlack;
+        scene.background.setHex(state.bgIsBlack ? 0x0a0c10 : 0xf1f5f9);
+        lblBg.textContent = state.bgIsBlack ? 'Black' : 'Light Studio';
+        dotBg.className = state.bgIsBlack 
+          ? 'w-3 h-3 rounded-full bg-black border border-slate-600'
+          : 'w-3 h-3 rounded-full bg-white border border-slate-300';
+      });
+
+      // 6. Main Finish Color Picker
+      const inpMainColor = document.getElementById('inp-main-color');
+      const lblMainColor = document.getElementById('lbl-main-color');
+      inpMainColor.addEventListener('input', (e) => {
+        state.mainColor = e.target.value;
+        lblMainColor.textContent = state.mainColor;
+        rebuildSkirtingMesh();
+      });
+
+      // 7. Side Faces Color Picker
+      const inpSideColor = document.getElementById('inp-side-color');
+      const lblSideColor = document.getElementById('lbl-side-color');
+      inpSideColor.addEventListener('input', (e) => {
+        state.sideColor = e.target.value;
+        lblSideColor.textContent = state.sideColor;
+        rebuildSkirtingMesh();
+      });
+
+      // 8. Mirror Reverse Front/Back
+      const btnMirror = document.getElementById('btn-mirror');
+      const badgeMirror = document.getElementById('badge-mirror');
+      btnMirror.addEventListener('click', () => {
+        state.isMirrored = !state.isMirrored;
+        badgeMirror.textContent = state.isMirrored ? 'MIRRORED' : 'NORMAL';
+        badgeMirror.className = state.isMirrored
+          ? 'text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30'
+          : 'text-[10px] px-2 py-0.5 rounded-full bg-slate-700 text-slate-300';
+        rebuildSkirtingMesh();
+      });
+
+      // 9. 360 Degree Auto Rotate Toggle
+      const btnAutoRotate = document.getElementById('btn-auto-rotate');
+      const badgeRotate = document.getElementById('badge-rotate');
+      btnAutoRotate.addEventListener('click', () => {
+        state.autoRotate = !state.autoRotate;
+        controls.autoRotate = state.autoRotate;
+        badgeRotate.textContent = state.autoRotate ? 'ON' : 'OFF';
+        badgeRotate.className = state.autoRotate
+          ? 'text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30'
+          : 'text-[10px] px-2 py-0.5 rounded-full bg-slate-700 text-slate-400';
+      });
+
+      // Camera Presets
+      document.getElementById('cam-iso').addEventListener('click', () => {
+        setCameraPosition(DEFAULT_CAM_POS.x, DEFAULT_CAM_POS.y, DEFAULT_CAM_POS.z, DEFAULT_CAM_TARGET);
+      });
+      document.getElementById('cam-front').addEventListener('click', () => {
+        setCameraPosition(0, 100, 1200);
+      });
+      document.getElementById('cam-side').addEventListener('click', () => {
+        setCameraPosition(1200, 100, 0);
+      });
+    }
+
+    function setCameraPosition(x, y, z, target = { x: 0, y: state.height / 2, z: 0 }) {
+      controls.reset();
+      camera.position.set(x, y, z);
+      controls.target.set(target.x, target.y, target.z);
+      controls.autoRotate = state.autoRotate;
+      controls.update();
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.onload = function() {
+      init();
+    };
+  </script>
+</body>
+</html>
